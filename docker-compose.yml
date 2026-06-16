@@ -1,0 +1,84 @@
+#
+# Production-like Superset stack (PostgreSQL + Redis + custom image).
+# Emulates production: external DB, Redis cache, init job, persistent volumes.
+#
+services:
+  redis:
+    image: redis:7
+    container_name: superset_cache
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  db:
+    image: postgres:17
+    container_name: superset_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: superset
+      POSTGRES_USER: superset
+      POSTGRES_PASSWORD: superset
+      EXAMPLES_DB: examples
+      EXAMPLES_USER: examples
+      EXAMPLES_PASSWORD: examples
+    volumes:
+      - db_home:/var/lib/postgresql/data
+      - ./superset/docker/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U superset -d superset"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  superset-init:
+    image: superset:6.1.0
+    container_name: superset_init
+    command: ["/bin/bash", "-c", "/app/docker/docker-init.sh && /app/scripts/post-init.sh"]
+    environment: &superset_env
+      SUPERSET_CONFIG_PATH: /app/pythonpath/superset_config.py
+      SUPERSET_LOAD_EXAMPLES: "yes"
+      DATABASE_DIALECT: postgresql
+      DATABASE_USER: superset
+      DATABASE_PASSWORD: superset
+      DATABASE_HOST: db
+      DATABASE_PORT: 5432
+      DATABASE_DB: superset
+      EXAMPLES_USER: examples
+      EXAMPLES_PASSWORD: examples
+      EXAMPLES_HOST: db
+      EXAMPLES_PORT: 5432
+      EXAMPLES_DB: examples
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SUPERSET_SECRET_KEY: test-secret-key-change-me-in-production
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    user: root
+    restart: "no"
+
+  superset:
+    image: superset:6.1.0
+    container_name: superset_app
+    command: ["/app/docker/entrypoints/run-server.sh"]
+    environment: *superset_env
+    ports:
+      - "8088:8088"
+    depends_on:
+      superset-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8088/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  db_home:

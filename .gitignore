@@ -1,0 +1,22 @@
+# Local Superset upstream clone (fetch separately at tag 6.1.0)
+superset/
+
+# Docker build artifacts
+.build/
+
+# Environment overrides
+.env
+.env.local
+
+# OS / editor
+.DS_Store
+*.swp
+*~
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Logs
+*.log
