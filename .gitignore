@@ -1,5 +1,5 @@
 # Local Superset upstream clone (fetch separately at tag 6.1.0)
-superset/
+/superset/
 
 # Docker build artifacts
 .build/
